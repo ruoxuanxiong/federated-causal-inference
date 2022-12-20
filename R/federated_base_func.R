@@ -392,8 +392,8 @@ est_mle <- function(this.y, this.X, this.w=NULL, wsq=FALSE, robust=TRUE, treat.r
 ##               unstable_covars<vector>: if models are unstable, a vector of unstable covariate names 
 ##                  reg.formula<formula>: a outcome regression formula 
 ##            treat.reg.formula<formula>: a treatment regression formula 
-##                        estimand<char>: "ATE" or "ATT"
-##         estimated_propensity<boolean>: if propensity scores are estimated or known
+##                        estimand<char>: "ATE" or "ATT"; default is "ATE"
+##         estimated_propensity<boolean>: if propensity scores are estimated or known; default is TRUE
 ## 
 ## return: the IPW-MLE coefficients, variance and estimated probabilities
 est_ht <- function(this.y, this.X.tilde, this.X, this.treat, reg.formula, treat.reg.formula, 
@@ -427,7 +427,7 @@ est_ht <- function(this.y, this.X.tilde, this.X, this.treat, reg.formula, treat.
 ##                  this.X.tilde<matrix>: a design matrix (include column of treatment)
 ##                        this.X<matrix>: a design matrix (baseline covariates only)
 ##                    this.treat<vector>: a vector of treatment assignments
-##                        estimand<char>: "ATE" or "ATT"
+##                        estimand<char>: "ATE" or "ATT"; default is "ATE"
 ##                      dataset_idx<int>: index of this dataset 
 ##                 pooled.y.coef<vector>: federated outcome model coefficients 
 ##                 pooled.e.coef<vector>: federated treatment model coefficients
