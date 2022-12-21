@@ -298,14 +298,12 @@ est_mle <- function(this.y, this.X, this.w=NULL, wsq=FALSE, robust=TRUE, treat.r
   if (is.null(this.w)) {
     this.w <- rep(1, length(this.y))
   }
-  
   if(!unstable) {
     data <- data.frame(this.y, this.w, this.X)
   } else {
     X.interact <- AddInteractCols(this.X, dataset_idx, unstable_covars, num_datasets)
     data <- data.frame(this.y, this.w, X.interact)
   }
-  
   if (!unstable) {
     if (treat.reg) {
       if (is.null(dataset_idx)) {
@@ -339,28 +337,9 @@ est_mle <- function(this.y, this.X, this.w=NULL, wsq=FALSE, robust=TRUE, treat.r
       colnames(data)[1] <- "y"
     }
   }
-  
   dstrat <- svydesign(id=~1, weights=this.w, data=data, variables=this.reg.formula)
   this.fit <- svyglm(formula=this.reg.formula, design=dstrat, family=binomial)
   est <- coef(this.fit)
-  
-  if (!unstable) {
-    est.adj = NULL
-  } else {
-    unstable_coeff_names <- apply(expand.grid(paste("I", 1:num_datasets, sep=""), c("intercept", unstable_covars)), 1, function(x) paste0(x, collapse="_"))
-    coeff_names <- c(setdiff(names(est), unstable_coeff_names), unstable_coeff_names)
-    
-    if (is.null(dataset_idx)) {
-      est.adj <- est
-    } else {
-      est.adj <- c(est, rep(0, (length(c("intercept", unstable_covars)))*(num_datasets-1)))
-      names(est.adj) <- c(names(est), 
-                          apply(expand.grid(paste("I", c(1:num_datasets)[c(1:num_datasets)!=dataset_idx], sep=""),
-                                            c("intercept", unstable_covars)), 1, function(x) paste0(x, collapse="_")))
-    }
-    est.adj <- est.adj[coeff_names]
-  } 
-  
   est.prob <- eval_prob(as.matrix(data[, names(est)]), est)
   
   if (!unstable) {
@@ -370,7 +349,7 @@ est_mle <- function(this.y, this.X, this.w=NULL, wsq=FALSE, robust=TRUE, treat.r
                                           dataset_idx=dataset_idx, robust=robust,
                                           unstable=TRUE, unstable_covars=unstable_covars, num_datasets=num_datasets)
   }
-  return(list(est=est, est.adj=est.adj, grad=out_grad_hessian$grad, outer.grad=out_grad_hessian$outer.grad,
+  return(list(est=est, grad=out_grad_hessian$grad, outer.grad=out_grad_hessian$outer.grad,
               hessian=out_grad_hessian$hessian, est.prob=est.prob, V=out_grad_hessian$V))
 }
 
