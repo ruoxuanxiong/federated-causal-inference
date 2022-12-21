@@ -3,8 +3,7 @@ title: "Federation Vignette"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, message=FALSE}
 source("federated_base_func.R")
 source("federated_pool_func.R")
 ```
@@ -167,13 +166,13 @@ result
 
 ### unstable outcome models / treatment models 
 
-We provide an example of federating outcome models, the same approach applied to treatment models by changing the input list of data set-specific response variables as treatment assignments. In this example, we assume stable outcome models across data sets and we use a robust federated variance estimator (`model_misspec=TRUE`). 
+In this example, we assume unstable outcome models across data sets (`X2` and `X3` are set as unstable covariates) and we use a robust federated variance estimator (`model_misspec=TRUE`). 
 
 ```{r}
 # specify the working covariates 
 # for now we assume stable models, so same set of covariates across data sets 
-covariates <- c("X1", "X2", "X3")   
-
+covariates <- c("X1", "X2", "X3")
+covariates_unstable <- c("X2", "X3")
 full_y <- vector(mode = "list", length = D)
 full_X <- vector(mode = "list", length = D)
 full_reg.formula <- vector(mode = "list", length = D)
@@ -190,8 +189,107 @@ for (ix in 1:D) {
   full_reg.formula[[ix]] <- formula
 }
 
-# restricted federated MLE estimation for outcome model 
-result <- poolMLE(full_y=full_y, full_X=full_X, full_reg.formula=full_reg.formula, model_misspec=TRUE)
+# unrestricted federated MLE estimation for outcome model 
+result <- poolMLE(full_y=full_y, full_X=full_X, 
+                  unstable=TRUE, num_datasets=D, unstable_covars = covariates_unstable, 
+                  full_reg.formula=full_reg.formula, model_misspec=TRUE)
+```
+
+The results is a summary table of pooled estimates, standard errors, t statistics and corresponding p-values. 
+
+```{r}
+result
+```
+
+# IPW-MLE 
+
+## data set-specific IPW-MLE estimation 
+
+If we are interested in any data set-specific IPW-MLE estimations, we can use the `est_ht` function and speicfy the outcome, treatment, covariates vectors, as well as the working candidate models. For example, we can obtain a IPW-MLE estimation for ATE (`estimand="ATE"`) with estimated propensity scores on the first dataset as follows:
+
+```{r, warning = FALSE}
+# specify the first dataset 
+idx <- 1; subsample <- subsample_lst[[idx]]
+
+# specify the working covariates 
+covariates <- c("X1", "X2", "X3")   
+# specify the working treatment model  
+treat.reg.formula <- as.formula(
+      paste("treat ~ 0 + intercept + ", paste(covariates, collapse = " + ")))
+# specify the working outcome model  
+reg.formula <- as.formula(
+      paste("y ~ 0 + intercept + treat + ", paste(covariates, collapse = " + ")))
+
+# get the outcome vector 
+y <- subsample$y  
+# get the treatment assignment vector 
+treat <- subsample$treat  
+# get the design matrix (with treatment column)
+X.tilde <- model.matrix(reg.formula, data = subsample)
+# get the design matrix (no treatment column)
+X <- model.matrix(treat.reg.formula, data = subsample)
+
+# IPW-MLE estimation for treatment model 
+result <- est_ht(this.y=y, this.X.tilde=X.tilde, this.X=X, this.treat=treat, 
+                 reg.formula=reg.formula, treat.reg.formula = treat.reg.formula, 
+                 estimand="ATE", estimated_propensity=TRUE)
+```
+
+This result is a list of IPW-MLE estimates including estimated coefficients for outcome model (`result$est`): 
+
+```{r}
+result$est
+```
+
+The variance covariance matrix (`result$V`):
+
+```{r}
+result$V
+```
+
+And the estimated probabilities for outcomes (`result$est.prob`). 
+
+```{r}
+result$est.prob
+```
+
+## federation using IPW-MLE 
+
+### stable models 
+
+In this example, we assume stable outcome models and stable treatment models across data sets. We assume the propensity scores are estimated (`estimated_propensity=TRUE`) and the target estimand is ATE (`estimand="ATE"`)
+
+```{r}
+# specify the working covariates 
+# for now we assume stable models, so same set of covariates across data sets 
+covariates <- c("X1", "X2", "X3")   
+
+full_y <- vector(mode = "list", length = D)
+full_X.tilde <- full_X <- vector(mode = "list", length = D)
+full_treat <- vector(mode = "list", length = D)
+full_reg.formula <- full_treat.reg.formula <- vector(mode = "list", length = D)
+
+for (ix in 1:D) {
+  subsample <- subsample_lst[[ix]]
+  
+  reg.formula <- as.formula(
+    paste("y ~ 0 + intercept + treat + ", paste(covariates, collapse = " + ")))
+  treat.reg.formula <- as.formula(
+    paste("treat ~ 0 + intercept + ", paste(covariates, collapse = " + ")))
+  
+  full_y[[ix]] <- subsample$y
+  full_treat[[ix]] <- subsample$treat
+  full_X[[ix]] <- model.matrix(treat.reg.formula, data = subsample)
+  full_X.tilde[[ix]] <- model.matrix(reg.formula, data = subsample)
+  full_reg.formula[[ix]] <- reg.formula
+  full_treat.reg.formula[[ix]] <- treat.reg.formula
+}
+
+# restricted federated IPW-MLE estimation 
+result <- poolHT(full_y=full_y, full_X.tilde=full_X.tilde, full_X=full_X, full_treat=full_treat, 
+                 unstable=FALSE, 
+                 full_reg.formula=full_reg.formula, full_treat.reg.formula=full_treat.reg.formula, 
+                 estimand="ATE", estimated_propensity=TRUE)
 ```
 
 The results is a summary table of pooled estimates, standard errors, t statistics and corresponding p-values. 
