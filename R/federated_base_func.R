@@ -1,4 +1,17 @@
 
+library(dplyr)
+library(maxLik)
+library(sandwich)
+library(pracma)
+library(numDeriv)
+library(haven)
+library(kableExtra)
+library(survey)
+library(xtable)
+library(tidyverse)
+
+set.seed(123)
+
 ## return a table of summary statistics for federated results 
 ## input args: coef<vector>: a vector of pooled coefficients 
 ##              cov<matrix>: a matrix of pooled covariance 
@@ -337,8 +350,8 @@ est_mle <- function(this.y, this.X, this.w=NULL, wsq=FALSE, robust=TRUE, treat.r
       colnames(data)[1] <- "y"
     }
   }
-  dstrat <- svydesign(id=~1, weights=this.w, data=data, variables=this.reg.formula)
-  this.fit <- svyglm(formula=this.reg.formula, design=dstrat, family=binomial)
+  dstrat <- survey::svydesign(id=~1, weights=this.w, data=data, variables=this.reg.formula)
+  this.fit <- survey::svyglm(formula=this.reg.formula, design=dstrat, family=binomial)
   est <- coef(this.fit)
   est.prob <- eval_prob(as.matrix(data[, names(est)]), est)
   
