@@ -34,7 +34,6 @@ Stylize <- function(summary_table){
   kable(summary_table) %>% kable_styling(full_width = F) #position = "left"
 }
 
-
 ## compute estimated probabilites with estimated coefficients 
 ## input args: X<matrix>: a design matrix X
 ##          beta<vector>: an estimated coefficients 
@@ -178,6 +177,26 @@ eval_grad_hessian <- function(est, this.y, this.X, this.w, wsq=FALSE, return_V=F
   } else {
     return(list(grad=grad, outer.grad=outer.grad, hessian=hessian))
   }
+}
+
+## modify the regression models to include unstable covariates 
+## input args: full_reg.formula<list>: list of all regression formulas
+##            unstable_covars<vector>: if models are unstable, a vector of unstable covariate names
+##                  num_datasets<int>: number of datasets
+## 
+## return: a modified unstable covariate regression model 
+UnstableRegModels <- function(full_reg.formula, unstable_covars, num_datasets) {
+  full_reg.formula.unstable <- list()
+  for (ix in c(1:num_datasets) ) {
+    response_var <- all.vars(full_reg.formula[[ix]])[1]
+    all_covariates <- all.vars(full_reg.formula[[ix]])[-1]
+    stable_covar <- setdiff(all_covariates, c("intercept", unstable_covars))
+    unstable_covar <- paste(paste("I", ix, sep = ""), c("intercept", unstable_covars), sep="_")
+    
+    full_reg.formula.unstable[[ix]] <- as.formula(
+      paste(response_var, "~ 0 + ", paste(c(stable_covar, unstable_covar), collapse = " + ")))
+  }
+  return(full_reg.formula.unstable)
 }
 
 
