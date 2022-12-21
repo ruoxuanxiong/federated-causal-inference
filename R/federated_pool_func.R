@@ -147,14 +147,19 @@ pool_ht_cov <- function(full_ht_cov_out, pool_e_cov=NULL, estimated_propensity=T
 ##         unstable_covars<vector>: if models are unstable, a vector of unstable covariate names 
 ##               num_datasets<int>: number of datasets
 ##          full_reg.formula<list>: list of all outcome regression formulas
-## full_reg.formula.unstable<list>: list of all outcome regression formulas (if unstable models)
 ##          model_misspec<boolean>: indicator if robust variance formulation is used; default is TRUE
 ##
 ## return: a summary table of federated MLE estimation results  
 poolMLE <- function(full_y, full_X, unstable=FALSE, unstable_covars=NULL, num_datasets=NULL, 
-                    full_reg.formula=NULL, full_reg.formula.unstable=NULL, model_misspec=TRUE) {
+                    full_reg.formula=NULL, 
+                    # full_reg.formula.unstable=NULL, 
+                    model_misspec=TRUE) {
   
   full_coef <- list(); full_outer_grad <- list(); full_hessian <- list(); full_V <- list()
+  
+  if (unstable) {
+    full_reg.formula.unstable <- UnstableRegModels(full_reg.formula, unstable_covars, num_datasets)
+  }
   
   for (i in c(1:length(full_y)) ) {
     this.y <- full_y[[i]]; this.X <- full_X[[i]]
@@ -202,9 +207,7 @@ poolMLE <- function(full_y, full_X, unstable=FALSE, unstable_covars=NULL, num_da
 ##               unstable_covars<vector>: if models are unstable, a vector of unstable covariate names 
 ##                     num_datasets<int>: number of datasets
 ##                full_reg.formula<list>: list of all outcome regression formulas
-##       full_reg.formula.unstable<list>: list of all outcome regression formulas (if unstable models)
 ##          full_treat.reg.formula<list>: list of all treatment regression formulas
-## full_treat.reg.formula.unstable<list>: list of all treatment regression formulas (if unstable models)
 ##                        estimand<char>: "ATE" or "ATT"; default is "ATE"
 ##         estimated_propensity<boolean>: if propensity scores are estimated or known; default is TRUE
 ##                model_misspec<boolean>: indicator if robust variance formulation is used; default is TRUE
@@ -213,10 +216,14 @@ poolMLE <- function(full_y, full_X, unstable=FALSE, unstable_covars=NULL, num_da
 poolHT <- function(full_y, full_X.tilde, full_X, full_treat, 
                    unstable=FALSE, unstable_covars=NULL,num_datasets=NULL, 
                    full_reg.formula=NULL, full_treat.reg.formula=NULL, 
-                   full_reg.formula.unstable=NULL, full_treat.reg.formula.unstable=NULL, 
                    estimand="ATE", estimated_propensity=TRUE, model_misspec=TRUE) {
   
   full_e_coef <- list(); full_e_grad <- list(); full_e_outer_grad <- list(); full_e_hessian <- list()
+  
+  if (unstable) {
+    full_reg.formula.unstable <- UnstableRegModels(full_reg.formula, unstable_covars, num_datasets)
+    full_treat.reg.formula.unstable <- UnstableRegModels(full_treat.reg.formula, unstable_covars, num_datasets)
+  }
   
   for (i in c(1:length(full_y)) ) {
     this.treat <- full_treat[[i]]; this.X <- full_X[[i]]
