@@ -1,0 +1,201 @@
+---
+title: "Federation Vignette"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("federated_base_func.R")
+source("federated_pool_func.R")
+```
+
+# Data generation 
+
+$$X_1, X_2, X_3 \sim Unif(-1, 1)$$
+
+$$A \sim Ber(p_A) \text{ where } p_A = expit(\gamma^T X) \text{ including intercept}$$
+where $\gamma = (0.1, 0.2, 0.3, 0.4)^T$
+
+$$Y \sim Ber(p_Y) \text{ where } p_Y = expit(\beta^T X) \text{ including intercept}$$
+where $\beta = (-0.2, -0.3, 0.5, 0.7, -0.6)^T$
+
+
+```{r}
+D = 2
+N = 20000 # entire simulated sample size 
+estimand = "ATE"
+
+gamma <- c(0.1, 0.2, 0.3, 0.4) 
+beta <- c(-0.2, -0.3, 0.5, 0.7, -0.6) 
+```
+
+```{r}
+expit <- function(x) {
+    return(1/(1 + exp(-x)))
+}
+
+GenerateData <- function(N, D, seed=123) {
+  set.seed(seed)
+  subsample_lst <- list()
+  for (ix in 1:D) {
+    X1 <- runif(N/D, min = -1, max = 1)
+    X2 <- runif(N/D, min = -1, max = 1)
+    X3 <- runif(N/D, min = -1, max = 1)
+    
+    treat <- rbinom(N/D, 1, expit(gamma[1]+gamma[2]*X1+gamma[3]*X2+gamma[4]*X3))
+    y0 <- rbinom(N/D, 1, expit(beta[1]+beta[2]*0+beta[3]*X1+beta[4]*X2+beta[5]*X3))
+    y1 <- rbinom(N/D, 1, expit(beta[1]+beta[2]*1+beta[3]*X1+beta[4]*X2+beta[5]*X3))
+    y <- y1*treat + y0*(1-treat)
+    intercept = rep(1, N/D)
+    dat <- data.frame(intercept, y, y1, y0, treat, X1, X2, X3)
+    dat$subsample <- ix
+    subsample_lst[[ix]] <- dat
+  }
+  pooled <- do.call("rbind", subsample_lst)
+  true_ate <- mean(pooled$y1) - mean(pooled$y0)
+  pooled$y <- pooled$y1*pooled$treat + pooled$y0*(1-pooled$treat)
+  
+  return(list(true_ate = true_ate, subsample_lst = subsample_lst, pooled = pooled))
+}
+```
+
+# MLE 
+
+## data set-specific MLE estimation 
+
+```{r}
+temp <- GenerateData(N=20000, D=2, seed=123)
+subsample_lst <- temp$subsample_lst
+```
+
+If we are interested in any data set-specific MLE estimations, we can use the `est_mle` function and speicfy the outcome (treatment) and covariates vectors, as well as the working candidate models. For example, we can obtain a MLE estimation for the **treatment model** (`treat.reg` set to `TRUE`) with robust variance estimator on the first dataset as follows:
+
+```{r}
+# specify the first dataset 
+idx <- 1; subsample <- subsample_lst[[idx]]
+
+# specify the working covariates 
+covariates <- c("X1", "X2", "X3")   
+# specify the working treatment model  
+treat.reg.formula <- as.formula(
+      paste("treat ~ 0 + intercept + ", paste(covariates, collapse = " + ")))
+
+# get the treatment assignment vector 
+treat <- subsample$treat  
+# get the design matrix 
+X <- model.matrix(treat.reg.formula, data = subsample)
+# use robust variance estimator 
+robust <- TRUE             
+
+# MLE estimation for treatment model 
+result <- est_mle(this.y=treat, this.X=X, robust=TRUE, treat.reg=TRUE, treat.reg.formula = treat.reg.formula)
+```
+
+This result is a list of MLE estimates including estimated coefficients: 
+
+```{r}
+result$est
+```
+
+The variance covariance matrix (robust sandwich form as we have specified, `result$V`): 
+
+```{r}
+result$V
+```
+
+Besides, it returns the gradient (`result$grad`), outer product of the gradient (`result$outer.grad`), hessian (`result$hessian`) of the log likelihood function evaluated at the MLE estimates, and the estimated probabilities (`result$est.prob`) of being treated. 
+
+Similarly, we can obtain a MLE estimation for the **outcome model** (`treat.reg` set to `FALSE`(default)) with robust variance estimator on the first dataset as follows:
+
+```{r}
+# specify the first dataset 
+idx <- 1; subsample <- subsample_lst[[idx]]
+
+# specify the working covariates 
+covariates <- c("X1", "X2", "X3")   
+# specify the working treatment model  
+reg.formula <- as.formula(
+  paste("y ~ 0 + intercept + treat + ", paste(covariates, collapse = " + ")))
+
+# get the outcome vector 
+y <- subsample$y  
+# get the design matrix 
+X <- model.matrix(reg.formula, data = subsample)
+# use robust variance estimator 
+robust <- TRUE             
+
+# MLE estimation for outcome model 
+result <- est_mle(this.y=y, this.X=X, robust=TRUE, treat.reg=FALSE, reg.formula = reg.formula)
+```
+
+## federation using MLE 
+
+### stable outcome models / treatment models 
+
+We provide an example of federating outcome models, the same approach applied to treatment models by changing the input list of data set-specific response variables as treatment assignments. In this example, we assume stable outcome models across data sets and we use a robust federated variance estimator (`model_misspec=TRUE`). 
+
+```{r}
+# specify the working covariates 
+# for now we assume stable models, so same set of covariates across data sets 
+covariates <- c("X1", "X2", "X3")   
+
+full_y <- vector(mode = "list", length = D)
+full_X <- vector(mode = "list", length = D)
+full_reg.formula <- vector(mode = "list", length = D)
+model_misspec <- TRUE
+
+for (ix in 1:D) {
+  subsample <- subsample_lst[[ix]]
+  full_y[[ix]] <- subsample$y
+  formula <- as.formula(
+    paste("y ~ 0 + intercept + treat + ", paste(covariates, collapse = " + ")))
+  
+  full_y[[ix]] <- subsample$y
+  full_X[[ix]] <- model.matrix(formula, data = subsample)
+  full_reg.formula[[ix]] <- formula
+}
+
+# restricted federated MLE estimation for outcome model 
+result <- poolMLE(full_y=full_y, full_X=full_X, full_reg.formula=full_reg.formula, model_misspec=TRUE)
+```
+
+The results is a summary table of pooled estimates, standard errors, t statistics and corresponding p-values. 
+
+```{r}
+result
+```
+
+### unstable outcome models / treatment models 
+
+We provide an example of federating outcome models, the same approach applied to treatment models by changing the input list of data set-specific response variables as treatment assignments. In this example, we assume stable outcome models across data sets and we use a robust federated variance estimator (`model_misspec=TRUE`). 
+
+```{r}
+# specify the working covariates 
+# for now we assume stable models, so same set of covariates across data sets 
+covariates <- c("X1", "X2", "X3")   
+
+full_y <- vector(mode = "list", length = D)
+full_X <- vector(mode = "list", length = D)
+full_reg.formula <- vector(mode = "list", length = D)
+model_misspec <- TRUE
+
+for (ix in 1:D) {
+  subsample <- subsample_lst[[ix]]
+  full_y[[ix]] <- subsample$y
+  formula <- as.formula(
+    paste("y ~ 0 + intercept + treat + ", paste(covariates, collapse = " + ")))
+  
+  full_y[[ix]] <- subsample$y
+  full_X[[ix]] <- model.matrix(formula, data = subsample)
+  full_reg.formula[[ix]] <- formula
+}
+
+# restricted federated MLE estimation for outcome model 
+result <- poolMLE(full_y=full_y, full_X=full_X, full_reg.formula=full_reg.formula, model_misspec=TRUE)
+```
+
+The results is a summary table of pooled estimates, standard errors, t statistics and corresponding p-values. 
+
+```{r}
+result
+```
