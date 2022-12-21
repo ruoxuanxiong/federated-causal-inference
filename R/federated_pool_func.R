@@ -154,7 +154,7 @@ pool_ht_cov <- function(full_ht_cov_out, pool_e_cov=NULL, estimated_propensity=T
 poolMLE <- function(full_y, full_X, unstable=FALSE, unstable_covars=NULL, num_datasets=NULL, 
                     full_reg.formula=NULL, full_reg.formula.unstable=NULL, model_misspec=TRUE) {
   
-  full_coef <- list(); full_coef_adj <- list(); full_outer_grad <- list(); full_hessian <- list(); full_V <- list()
+  full_coef <- list(); full_outer_grad <- list(); full_hessian <- list(); full_V <- list()
   
   for (i in c(1:length(full_y)) ) {
     this.y <- full_y[[i]]; this.X <- full_X[[i]]
@@ -167,7 +167,6 @@ poolMLE <- function(full_y, full_X, unstable=FALSE, unstable_covars=NULL, num_da
                          full_reg.formula.unstable=full_reg.formula.unstable)  
     }
     full_coef[[i]] <- out_mle$est
-    full_coef_adj[[i]] <- out_mle$est.adj
     full_hessian[[i]] <- out_mle$hessian
     full_V[[i]] <- out_mle$V
   }
@@ -217,8 +216,7 @@ poolHT <- function(full_y, full_X.tilde, full_X, full_treat,
                    full_reg.formula.unstable=NULL, full_treat.reg.formula.unstable=NULL, 
                    estimand="ATE", estimated_propensity=TRUE, model_misspec=TRUE) {
   
-  full_e_coef <- list(); full_e_coef_adj <-list()
-  full_e_grad <- list(); full_e_outer_grad <- list(); full_e_hessian <- list()
+  full_e_coef <- list(); full_e_grad <- list(); full_e_outer_grad <- list(); full_e_hessian <- list()
   
   for (i in c(1:length(full_y)) ) {
     this.treat <- full_treat[[i]]; this.X <- full_X[[i]]
@@ -230,12 +228,10 @@ poolHT <- function(full_y, full_X.tilde, full_X, full_treat,
                            full_treat.reg.formula.unstable=full_treat.reg.formula.unstable)  
     }
     full_e_coef[[i]] <- e_out_mle$est
-    full_e_coef_adj[[i]] <- e_out_mle$est.adj
     full_e_hessian[[i]] <- e_out_mle$hessian
   }
   pool_e_coef <- pool_mle_coef(full_e_coef, full_e_hessian)
   
-  # update gradient and hessian matrices of the propensity model 
   for (i in c(1:length(full_y))) {
     this.treat <- full_treat[[i]]; this.X <- full_X[[i]]; this.w <- rep(1, length(this.treat))
     
@@ -253,8 +249,6 @@ poolHT <- function(full_y, full_X.tilde, full_X, full_treat,
   }
   
   pool_e_cov <- pool_mle_cov(full_e_hessian, full_e_outer_grad, model_misspec=model_misspec)
-  
-  # calculate the propensity on each data set
   full_w.y <- list(); full_est.e.prob <- list()
   full_w.alt.y <- list()
   for (i in c(1:length(full_y))) {
@@ -274,10 +268,7 @@ poolHT <- function(full_y, full_X.tilde, full_X, full_treat,
     full_w.alt.y[[i]] <- alternative_propensity_weight(this.treat, this.est.e.prob, estimand = estimand)
   }
   
-  # estimate the coefficient of the outcome model on each data set
-  full_y_coef <- list(); full_y_coef_adj <- list()
-  full_y_grad <- list(); full_y_outer_grad <- list(); full_y_hessian <- list()
-  full_y_grad.alt <- list()
+  full_y_coef <- list(); full_y_grad <- list(); full_y_outer_grad <- list(); full_y_hessian <- list(); full_y_grad.alt <- list()
   for (i in c(1:length(full_y)) ) {
     this.y <- full_y[[i]]; this.X.tilde <- full_X.tilde[[i]]; this.w.y <- full_w.y[[i]]
     if (!unstable) {
@@ -289,15 +280,12 @@ poolHT <- function(full_y, full_X.tilde, full_X, full_treat,
     }
 
     full_y_coef[[i]] <- y_mle_out$est
-    full_y_coef_adj[[i]] <- y_mle_out$est.adj
     full_y_grad[[i]] <- y_mle_out$grad
     full_y_outer_grad[[i]] <- y_mle_out$outer.grad
     full_y_hessian[[i]] <- y_mle_out$hessian
   }
-  
   pool_y_coef <- pool_mle_coef(full_y_coef, full_y_hessian)
   
-  # update gradient and hessian matrices of the outcome model
   for (i in c(1:length(full_y))) {
     this.y <- full_y[[i]]; this.X.tilde <- full_X.tilde[[i]]; this.w.y <- full_w.y[[i]]
     if (!unstable) {
@@ -312,10 +300,8 @@ poolHT <- function(full_y, full_X.tilde, full_X, full_treat,
     full_y_outer_grad[[i]] <- y_out_grad_hessian$outer.grad
     full_y_hessian[[i]] <- y_out_grad_hessian$hessian
     full_y_grad.alt[[i]] <- diag(as.vector(full_w.alt.y[[i]]) / as.vector(full_w.y[[i]])) %*% y_out_grad_hessian$grad
-    
   }
   
-  # calculate ht covariance matrices
   full_ht_cov_out <- list()
   for (i in c(1:length(full_y))) {
     n_obs <- length(full_y[[i]])
