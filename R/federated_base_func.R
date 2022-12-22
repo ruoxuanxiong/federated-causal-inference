@@ -191,7 +191,8 @@ UnstableRegModels <- function(full_reg.formula, unstable_covars, num_datasets) {
     response_var <- all.vars(full_reg.formula[[ix]])[1]
     all_covariates <- all.vars(full_reg.formula[[ix]])[-1]
     stable_covar <- setdiff(all_covariates, c("intercept", unstable_covars))
-    unstable_covar <- paste(paste("I", ix, sep = ""), c("intercept", unstable_covars), sep="_")
+    unstable_covar <- paste(paste("I", ix, sep = ""), 
+                            c("intercept", intersect(all_covariates, unstable_covars)), sep="_")
     
     full_reg.formula.unstable[[ix]] <- as.formula(
       paste(response_var, "~ 0 + ", paste(c(stable_covar, unstable_covar), collapse = " + ")))
@@ -210,6 +211,7 @@ UnstableRegModels <- function(full_reg.formula, unstable_covars, num_datasets) {
 AddInteractCols <- function(this.X, dataset_idx, unstable_covars, num_datasets) {
   this.stable_cols <- as.matrix(this.X[,!colnames(this.X) %in% c("intercept", unstable_covars)]) 
   colnames(this.stable_cols) <- colnames(this.X)[!colnames(this.X) %in% c("intercept", unstable_covars)]
+  unstable_covars <- intersect(colnames(this.X), unstable_covars)
   
   # if idx is not given, append unstable columns corresponding to all datasets
   if (is.null(dataset_idx)) {
@@ -439,28 +441,24 @@ est_ht <- function(this.y, this.X.tilde, this.X, this.treat, reg.formula, treat.
 ##                        this.X<matrix>: a design matrix (baseline covariates only)
 ##                    this.treat<vector>: a vector of treatment assignments
 ##                        estimand<char>: "ATE" or "ATT"; default is "ATE"
-##                      dataset_idx<int>: index of this dataset 
 ##                 pooled.y.coef<vector>: federated outcome model coefficients 
 ##                 pooled.e.coef<vector>: federated treatment model coefficients
 ##                  reg.formula<formula>: a outcome regression formula 
-##                full_reg.formula<list>: list of all outcome regression formulas
 ##            treat.reg.formula<formula>: a treatment regression formula 
-##          full_treat.reg.formula<list>: list of all treatment regression formulas
 ##
 ## return: the AIPW estimates, variance and influence functions 
-est_aipw <- function(this.y, this.X.tilde, this.X, this.treat, estimand="ATE", dataset_idx=NULL, 
+est_aipw <- function(this.y, this.X.tilde, this.X, this.treat, estimand="ATE", 
                      pooled.y.coef=NULL, pooled.e.coef=NULL, 
-                     reg.formula=NULL, full_reg.formula=NULL, 
-                     treat.reg.formula=NULL, full_treat.reg.formula=NULL) {
+                     reg.formula=NULL, treat.reg.formula=NULL) {
   
   n_obs <- length(this.y); this.w <- rep(1, length(this.y))
   
   if (is.null(pooled.e.coef)) {
-    e_mle_out <- est_mle(this.treat, this.X, this.w, dataset_idx=dataset_idx, treat.reg=TRUE, 
-                         treat.reg.formula=treat.reg.formula, full_treat.reg.formula=full_treat.reg.formula)
+    e_mle_out <- est_mle(this.treat, this.X, this.w, treat.reg=TRUE, 
+                         treat.reg.formula=treat.reg.formula)
     est.e.prob <- e_mle_out$est.prob
-    y_mle_out <- est_mle(this.y, this.X.tilde, this.w, wsq=TRUE, dataset_idx=dataset_idx, 
-                         reg.formula=reg.formula, full_reg.formula=full_reg.formula)
+    y_mle_out <- est_mle(this.y, this.X.tilde, this.w, wsq=TRUE, 
+                         reg.formula=reg.formula)
     est.y.coef <- y_mle_out$est    
   } else {
     this.pool_e_coef <- pooled.e.coef[rownames(pooled.e.coef) %in% colnames(this.X), ]
