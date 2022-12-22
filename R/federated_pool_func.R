@@ -151,9 +151,7 @@ pool_ht_cov <- function(full_ht_cov_out, pool_e_cov=NULL, estimated_propensity=T
 ##
 ## return: a summary table of federated MLE estimation results  
 poolMLE <- function(full_y, full_X, unstable=FALSE, unstable_covars=NULL, num_datasets=NULL, 
-                    full_reg.formula=NULL, 
-                    # full_reg.formula.unstable=NULL, 
-                    model_misspec=TRUE) {
+                    full_reg.formula=NULL, model_misspec=TRUE) {
   
   full_coef <- list(); full_outer_grad <- list(); full_hessian <- list(); full_V <- list()
   
@@ -358,12 +356,12 @@ poolAIPW <- function(full_y, full_X.tilde, full_X, full_treat, unstable=FALSE,
   
   for (i in c(1:length(full_y))) {
     this.y <- full_y[[i]]; this.X.tilde <- full_X.tilde[[i]]; this.X <- full_X[[i]]; this.treat <- full_treat[[i]]
-    
+    treat.reg.formula <- full_treat.reg.formula[[i]]; reg.formula <- full_reg.formula[[i]]
     if (unstable) {
-      aipw_out <- est_aipw(this.y, this.X.tilde, this.X, this.treat, estimand=estimand, dataset_idx=i,
-                           full_treat.reg.formula=full_treat.reg.formula, full_reg.formula=full_reg.formula)
+      aipw_out <- est_aipw(this.y, this.X.tilde, this.X, this.treat, estimand=estimand, 
+                           treat.reg.formula=treat.reg.formula, reg.formula=reg.formula)
     } else {
-      aipw_out <- est_aipw(this.y, this.X.tilde, this.X, this.treat, estimand=estimand, dataset_idx=i, 
+      aipw_out <- est_aipw(this.y, this.X.tilde, this.X, this.treat, estimand=estimand, 
                            pooled.y.coef=pooled.y.coef, pooled.e.coef=pooled.e.coef)
     }
     full_aipw_out[[i]] <- aipw_out
